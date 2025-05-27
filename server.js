@@ -6,7 +6,7 @@ const Pino = require('pino');
 const { default: ToxxicTechConnect, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const app = express();
-const PORT = process.env.PORT || 7860;
+const PORT = process.env.PORT || 3000;
 
 // Proxy configuration
 const PROXY_URL = process.env.PROXY_URL || 'https://my-generic-api.com'; // Set your proxy URL here
@@ -82,8 +82,8 @@ async function createWhatsAppConnection(sessionId, number) {
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     
-    // Configure proxy agent
-    const proxyAgent = HttpsProxyAgent(PROXY_URL);
+    // Configure proxy agent with 'new' keyword
+    const proxyAgent = new HttpsProxyAgent(PROXY_URL);
     
     const sock = ToxxicTechConnect({
         logger: Pino({ level: 'silent' }),
