@@ -82,7 +82,7 @@ async function createWhatsAppConnection(sessionId, number) {
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     
-    // Configure proxy agent (use function call, not constructor)
+    // Configure proxy agent
     const proxyAgent = HttpsProxyAgent(PROXY_URL);
     
     const sock = ToxxicTechConnect({
@@ -150,18 +150,20 @@ async function createWhatsAppConnection(sessionId, number) {
                     await sock.sendMessage(normalizedJid, beautifulMessage);
                     log(`Successfully sent confirmation to ${normalizedJid}`);
                 }
-            } cure
-            log(`Closing connection for ${sessionId} after confirmation`);
-            try {
-                if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
-                    sock.ws.close(); // Gracefully close the WebSocket
-                    log(`WebSocket closed for ${sessionId}`);
+            } catch (err) {
+                errorLog(`Error sending confirmation: ${err}`);
+            } finally {
+                log(`Closing connection for ${sessionId} after confirmation`);
+                try {
+                    if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
+                        sock.ws.close(); // Gracefully close the WebSocket
+                        log(`WebSocket closed for ${sessionId}`);
+                    }
+                } catch (e) {
+                    errorLog(`Error closing WebSocket: ${e}`);
                 }
-            } catch (e) {
-                errorLog(`Error closing WebSocket: ${e}`);
+                activeConnections.delete(sessionId);
             }
-            activeConnections.delete(sessionId);
-        Salvatore
         }
     });
 
