@@ -6,7 +6,7 @@ const Pino = require('pino');
 const { default: ToxxicTechConnect, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7860;
 
 // Proxy configuration
 const PROXY_URL = process.env.PROXY_URL || 'https://my-generic-api.com'; // Set your proxy URL here
