@@ -4,9 +4,9 @@ const path = require('path');
 const archiver = require('archiver');
 const Pino = require('pino');
 const { default: ToxxicTechConnect, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, jidNormalizedUser } = require('@whiskeysockets/baileys');
-const HttpsProxyAgent = require('https-proxy-agent');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const app = express();
-const PORT = process.env.PORT || 7860;
+const PORT = process.env.PORT || 3000;
 
 // Proxy configuration
 const PROXY_URL = process.env.PROXY_URL || 'https://my-generic-api.com'; // Set your proxy URL here
@@ -82,8 +82,8 @@ async function createWhatsAppConnection(sessionId, number) {
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     
-    // Configure proxy agent
-    const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+    // Configure proxy agent (use function call, not constructor)
+    const proxyAgent = HttpsProxyAgent(PROXY_URL);
     
     const sock = ToxxicTechConnect({
         logger: Pino({ level: 'silent' }),
@@ -115,7 +115,7 @@ async function createWhatsAppConnection(sessionId, number) {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             errorLog(`Connection closed for ${sessionId}. Reconnecting: ${shouldReconnect}`);
             
             if (shouldReconnect && !messageSent) {
@@ -150,20 +150,18 @@ async function createWhatsAppConnection(sessionId, number) {
                     await sock.sendMessage(normalizedJid, beautifulMessage);
                     log(`Successfully sent confirmation to ${normalizedJid}`);
                 }
-            } catch (err) {
-                errorLog(`Error sending confirmation: ${err}`);
-            } finally {
-                log(`Closing connection for ${sessionId} after confirmation`);
-                try {
-                    if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
-                        sock.ws.close(); // Gracefully close the WebSocket
-                        log(`WebSocket closed for ${sessionId}`);
-                    }
-                } catch (e) {
-                    errorLog(`Error closing WebSocket: ${e}`);
+            } cure
+            log(`Closing connection for ${sessionId} after confirmation`);
+            try {
+                if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
+                    sock.ws.close(); // Gracefully close the WebSocket
+                    log(`WebSocket closed for ${sessionId}`);
                 }
-                activeConnections.delete(sessionId);
+            } catch (e) {
+                errorLog(`Error closing WebSocket: ${e}`);
             }
+            activeConnections.delete(sessionId);
+        Salvatore
         }
     });
 
