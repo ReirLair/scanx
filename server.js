@@ -6,6 +6,7 @@ const Pino = require('pino');
 const { default: ToxxicTechConnect, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, jidNormalizedUser } = require('@whiskeysockets/baileys');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const userAgent = require('user-agents');
+const crypto = require('crypto'); // Added missing import
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,8 +44,8 @@ const store = makeInMemoryStore({
 // Generate random session ID
 function generateSessionId() {
     const prefix = 'levi';
-    const randomChars = () => Math.random().toString(36).substring(2, 10);
-    return `${prefix}${Math.floor(Math.random() * 1000000)}${randomChars()}`.toLowerCase();
+    const randomChars = crypto.randomBytes(4).toString('hex'); // Use crypto for randomness
+    return `${prefix}${Math.floor(Math.random() * 1000000)}${randomChars}`.toLowerCase();
 }
 
 // Create zip from session folder
@@ -61,13 +62,13 @@ function createZip(sessionId, res) {
     
     output.on('close', () => {
         res.download(zipPath, `${sessionId}.zip`, (err) => {
-            if (err) errorLog(`Download error: ${err}`);
+            if (err) errorLog(`Download error: ${err.message}`);
             fs.unlinkSync(zipPath);
         });
     });
     
     archive.on('error', (err) => {
-        errorLog(`Archive error: ${err}`);
+        errorLog(`Archive error: ${err.message}`);
         res.status(500).send('Error creating zip file');
     });
     
@@ -92,7 +93,7 @@ function getRandomBrowser() {
 
 // Throttle function to add delay
 async function throttleRequest() {
-    const delay = Math.random() * 1000 + 500; // Random delay between 500-1500ms
+    const delay = Math.random() * 1000 + 500; // 500-1500ms
     await new Promise(resolve => setTimeout(resolve, delay));
 }
 
@@ -106,7 +107,13 @@ async function createWhatsAppConnection(sessionId, number) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     
     // Configure proxy agent
-    const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+    let proxyAgent;
+    try {
+        proxyAgent = new HttpsProxyAgent(PROXY_URL);
+    } catch (err) {
+        errorLog(`Proxy agent error: ${err.message}`);
+        throw err;
+    }
     
     const sock = ToxxicTechConnect({
         logger: Pino({ level: 'silent' }),
@@ -114,15 +121,15 @@ async function createWhatsAppConnection(sessionId, number) {
         auth: state,
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 0,
-        keepAliveIntervalMs: 15000, // Increased interval
+        keepAliveIntervalMs: 15000,
         emitOwnEvents: true,
-        fireInitQueries: false, // Reduce initial queries
-        generateHighQualityLinkPreview: false, // Disable to reduce traffic
-        syncFullHistory: false, // Disable to reduce data
-        markOnlineOnConnect: false, // Hide online status
-        browser: getRandomBrowser(), // Randomize browser
+        fireInitQueries: false,
+        generateHighQualityLinkPreview: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        browser: getRandomBrowser(),
         fetchAgent: proxyAgent,
-        userAgent: new userAgent().toString(), // Random user agent
+        userAgent: new userAgent().toString(),
         getMessage: async () => ({}),
     });
 
@@ -140,16 +147,17 @@ async function createWhatsAppConnection(sessionId, number) {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             const attempts = reconnectionAttempts.get(sessionId) || 0;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const errorMessage = lastDisconnect?.error?.message || 'Unknown error';
             
-            if (shouldReconnect && !messageSent && attempts < maxReconnects) {
+            if (statusCode !== DisconnectReason.loggedOut && !messageSent && attempts < maxReconnects) {
                 reconnectionAttempts.set(sessionId, attempts + 1);
-                errorLog(`Connection closed for ${sessionId}. Attempt ${attempts + 1}/${maxReconnects}`);
+                errorLog(`Connection closed for ${sessionId}. Attempt ${attempts + 1}/${maxReconnects}. Status: ${statusCode}, Error: ${errorMessage}`);
                 await throttleRequest();
                 setTimeout(() => createWhatsAppConnection(sessionId, number), 2000 + Math.random() * 1000);
             } else {
-                errorLog(`Max reconnects reached or message sent for ${sessionId}. Stopping.`);
+                errorLog(`Max reconnects reached or message sent for ${sessionId}. Status: ${statusCode}, Error: ${errorMessage}`);
                 activeConnections.delete(sessionId);
                 reconnectionAttempts.delete(sessionId);
             }
@@ -179,7 +187,7 @@ async function createWhatsAppConnection(sessionId, number) {
                     log(`Successfully sent confirmation to ${normalizedJid}`);
                 }
             } catch (err) {
-                errorLog(`Error sending confirmation: ${err}`);
+                errorLog(`Error sending confirmation: ${err.message}`);
             } finally {
                 log(`Closing connection for ${sessionId} after confirmation`);
                 try {
@@ -188,7 +196,7 @@ async function createWhatsAppConnection(sessionId, number) {
                         log(`WebSocket closed for ${sessionId}`);
                     }
                 } catch (e) {
-                    errorLog(`Error closing WebSocket: ${e}`);
+                    errorLog(`Error closing WebSocket: ${e.message}`);
                 }
                 activeConnections.delete(sessionId);
                 reconnectionAttempts.delete(sessionId);
@@ -230,12 +238,12 @@ app.post('/pair', async (req, res) => {
                 try {
                     activeConnections.get(sessionId)?.sock?.ws?.close();
                 } catch (err) {
-                    errorLog(`Cleanup error: ${err}`);
+                    errorLog(`Cleanup error: ${err.message}`);
                 }
                 activeConnections.delete(sessionId);
                 reconnectionAttempts.delete(sessionId);
             }
-        }, 300000); // Reduced to 5 minutes
+        }, 300000);
 
         res.json({ 
             sessionId,
@@ -251,7 +259,7 @@ app.post('/pair', async (req, res) => {
             activeConnections.delete(sessionId);
             reconnectionAttempts.delete(sessionId);
         } catch (err) {
-            errorLog(`Cleanup error: ${err}`);
+            errorLog(`Cleanup error: ${err.message}`);
         }
         
         res.status(500).json({ error: error.message });
@@ -273,7 +281,7 @@ setInterval(() => {
             try {
                 conn.sock?.ws?.close();
             } catch (err) {
-                errorLog(`Cleanup error: ${err}`);
+                errorLog(`Cleanup error: ${err.message}`);
             }
             activeConnections.delete(sessionId);
             reconnectionAttempts.delete(sessionId);
@@ -293,7 +301,7 @@ process.on('SIGTERM', () => {
         try {
             conn.sock?.ws?.close();
         } catch (err) {
-            errorLog(`Error closing WebSocket for ${sessionId}: ${err}`);
+            errorLog(`Error closing WebSocket for ${sessionId}: ${err.message}`);
         }
         activeConnections.delete(sessionId);
         reconnectionAttempts.delete(sessionId);
